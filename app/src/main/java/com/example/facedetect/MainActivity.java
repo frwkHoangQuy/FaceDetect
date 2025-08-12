@@ -4,10 +4,19 @@ import android.content.pm.PackageManager;
 
 import android.os.Bundle;
 import android.Manifest;
+import android.util.Size;
 
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.AspectRatio;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.resolutionselector.AspectRatioStrategy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
+import androidx.camera.video.FallbackStrategy;
+import androidx.camera.video.Quality;
+import androidx.camera.video.QualitySelector;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -17,6 +26,7 @@ import com.example.facedetect.databinding.ActivityMainBinding;
 import com.google.common.util.concurrent.ListenableFuture;
 
 
+import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
 import androidx.camera.core.Preview;
@@ -78,13 +88,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void bindPreview(@NonNull ProcessCameraProvider cameraProvider) {
-        Preview preview = new Preview.Builder().build();
+        int rotation = viewBinding.viewFinder.getDisplay().getRotation();
+        QualitySelector qualitySelector = QualitySelector.fromOrderedList(
+                Arrays.asList(Quality.UHD, Quality.FHD),
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)
+        );
+
+
+        ResolutionSelector resolutionSelector = new ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+                .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                .build();
+
+        Preview preview = new Preview.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .setTargetRotation(rotation)
+                .build();
+
         preview.setSurfaceProvider(viewBinding.viewFinder.getSurfaceProvider());
+        viewBinding.viewFinder.setScaleY(-1f);
+        viewBinding.viewFinder.setScaleX(-1f);
+
 
         CameraSelector cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
                 .build();
-
         cameraProvider.unbindAll();
         cameraProvider.bindToLifecycle(this, cameraSelector, preview);
     }

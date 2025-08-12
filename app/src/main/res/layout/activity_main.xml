@@ -11,7 +11,8 @@
         android:id="@+id/viewFinder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center" />
+        app:implementationMode="compatible"
+        app:scaleType="fillCenter" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>
