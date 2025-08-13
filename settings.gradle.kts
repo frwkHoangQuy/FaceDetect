@@ -20,5 +20,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "FaceDetect"
-include(":app")
+include(":app", ":opencv")
  

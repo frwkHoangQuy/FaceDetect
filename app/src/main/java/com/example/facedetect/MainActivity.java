@@ -2,6 +2,8 @@ package com.example.facedetect;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
@@ -26,6 +28,7 @@ import androidx.core.content.ContextCompat;
 import com.example.facedetect.databinding.ActivityMainBinding;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -104,12 +107,12 @@ public class MainActivity extends AppCompatActivity {
                 .setTargetRotation(viewBinding.viewFinder.getDisplay().getRotation())
                 .build();
         viewBinding.viewFinder.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
-        viewBinding.viewFinder.setScaleX(-1);
-        viewBinding.viewFinder.setScaleY(-1);
+//        viewBinding.viewFinder.setScaleX(-1);
+//        viewBinding.viewFinder.setScaleY(-1);
         preview.setSurfaceProvider(viewBinding.viewFinder.getSurfaceProvider());
 
         CameraSelector cameraSelector;
-        cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+        cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -124,14 +127,65 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    private Mat yuvToMat(Image image) {
+        Image.Plane[] planes = image.getPlanes();
+        ByteBuffer yBuffer = planes[0].getBuffer();
+        ByteBuffer uBuffer = planes[1].getBuffer();
+        ByteBuffer vBuffer = planes[2].getBuffer();
+
+        int ySize = yBuffer.remaining();
+        int uSize = uBuffer.remaining();
+        int vSize = vBuffer.remaining();
+
+        byte[] nv21 = new byte[ySize + uSize + vSize];
+        yBuffer.get(nv21, 0, ySize);
+        vBuffer.get(nv21, ySize, vSize);
+        uBuffer.get(nv21, ySize + vSize, uSize);
+
+        Mat yuvMat = new Mat(image.getHeight() + image.getHeight() / 2, image.getWidth(), CvType.CV_8UC1);
+        yuvMat.put(0, 0, nv21);
+        return yuvMat;
+    }
+
+
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(ImageProxy imageProxy) {
-        Image image = imageProxy.getImage();
-        if (image != null) {
-            Log.d("CameraX", "Nhận được ảnh: " + image.getWidth() + "x" + image.getHeight());
-        } else {
-            Log.d("CameraX", "Không có ảnh trong frame này");
+        try {
+            // 1️⃣ Lấy ảnh từ ImageProxy
+            Image image = imageProxy.getImage();
+            if (image == null) return;
+
+            // 2️⃣ Chuyển YUV → Bitmap RGB
+            Bitmap rgbBitmap = yuvToRgb(image); // tự viết hoặc dùng OpenCV / RenderScript
+
+            // 3️⃣ Xử lý orientation
+            int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
+            Bitmap rotatedBitmap = rotateBitmap(rgbBitmap, rotationDegrees);
+
+            // 4️⃣ Crop theo vùng khung preview
+            Rect cropRect = getFaceBoxFrame(); // xác định vùng mà user cần đặt mặt vào
+            Bitmap croppedBitmap = Bitmap.createBitmap(
+                    rotatedBitmap,
+                    cropRect.left, cropRect.top,
+                    cropRect.width(), cropRect.height()
+            );
+
+            // 5️⃣ Detect tự động
+            if (faceDetectorReady) {
+                faceDetector.detect(croppedBitmap, result -> {
+                    if (result.success) {
+                        // ✅ Khuôn mặt được detect thành công
+                        // Thực hiện bước tiếp theo: làm sáng, overlay bounding box, etc.
+                    } else {
+                        // ❌ Không có mặt trong frame → có thể clear overlay
+                    }
+                });
+            }
+
+        } finally {
+            // 6️⃣ Giải phóng ImageProxy để camera tiếp tục stream
+            imageProxy.close();
         }
-        imageProxy.close();
+    }
     }
 }
