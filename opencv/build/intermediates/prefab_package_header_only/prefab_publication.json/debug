@@ -1,5 +1,5 @@
 {
-  "installationFolder": "C:\\Users\\Admin\\AndroidStudioProjects\\FaceDetect\\opencv\\build\\intermediates\\prefab_package\\debug\\prefab",
+  "installationFolder": "/home/sylroot/AndroidStudioProjects/FaceDetect/opencv/build/intermediates/prefab_package/debug/prefab",
   "gradlePath": ":opencv",
   "packageInfo": {
     "packageName": "opencv",
@@ -8,7 +8,7 @@
     "modules": [
       {
         "moduleName": "opencv_jni_shared",
-        "moduleHeaders": "C:\\Users\\Admin\\AndroidStudioProjects\\FaceDetect\\opencv\\native\\jni\\include",
+        "moduleHeaders": "/home/sylroot/AndroidStudioProjects/FaceDetect/opencv/native/jni/include",
         "moduleExportLibraries": [],
         "abis": []
       }

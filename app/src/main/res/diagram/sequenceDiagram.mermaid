@@ -1,0 +1,102 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant Activity as BaseFaceDetectActivity
+    participant VM as BaseFaceDetectViewModel
+    participant SC as SCFaceDetector
+    participant ETC as ETCFaceDetector (Detector)
+    participant Cam as CameraX/ProcessCameraProvider
+    participant Analyzer as ImageAnalysis.Analyzer
+    participant MLKit as ML Kit FaceDetector
+    participant UI as UI Thread
+    participant Overlay as "GraphicOverlay/SCFaceGraphic"
+    participant LExec as livenessExecutor
+    participant SDK as ETC FaceSDK
+
+    User->>Activity: onCreate(savedInstanceState)
+    activate Activity
+    Activity->>SC: getInstance(app, mSCConfigs, VM, DetectListener=this)
+    Activity->>SC: register(context=this, faceDetectId, RegisterListener)
+    SC->>ETC: register(context, listener)
+    Note right of ETC: Khởi tạo detectArea, min/maxFaceSize\\nMLKit FaceDetectorOptions (FAST, minFaceSize, tracking...)\\nSDKSetting(inputSize, orangeArea, thresholds)
+    ETC->>MLKit: FaceDetection.getClient(realTimeOpts)
+    ETC->>SDK: new FaceSDK(context, assets, SDKSetting)
+    ETC-->>SC: onRegisterSuccess()
+    SC-->>Activity: onRegisterSuccess()
+
+    Activity->>Cam: ProcessCameraProvider.bindToLifecycle(preview, imageAnalysis)
+    Activity->>Cam: enableTorch() if mSCConfigs.lightOn == YES
+    Cam-->>Analyzer: onFrame(ImageProxy) [backgroundExecutor]
+    Analyzer->>Activity: onFrame(imageProxy)
+    Activity->>Activity: if (mNeedUpdateGraphicOverlayImageSourceInfo) setImageSourceInfo(...)
+    Activity->>Activity: if (!mIsRegisterSuccess) return
+    Activity->>SC: detectFace(Image image, int rotationDegrees)
+    SC->>ETC: detectFace(image, rotationDegrees)
+
+    ETC->>MLKit: process(InputImage.fromMediaImage(image, rotationDegrees))
+    MLKit-->>ETC: List<Face> faces
+    alt faces.isEmpty()
+        ETC-->>Activity: onDetectResult(null, null, null, null)
+    else
+        ETC->>ETC: rect = mirror? new Rect(...) : face.getBoundingBox()
+        ETC->>ETC: if (detectArea.contains(rect)) ...
+        ETC-->>Activity: onDetectResult(rect, eulerX, eulerY, eulerZ)
+    end
+    Activity->>Analyzer: finally { imageProxy.close() }
+
+%% Handle onDetectResult
+    Activity->>Activity: onDetectResult(rect, x, y, z)
+    alt rect == null OR tooBig(rect) OR tooSmall(rect)
+        Activity->>Overlay: clear()
+        Activity->>Activity: setFaceDetectState(false)
+        Activity->>Activity: setFaceDetectMessage(guide_vi + "\\n" + guide_en)
+    else
+        Activity->>Activity: onFaceDetect()
+        Activity->>Overlay: new SCFaceGraphic(rect, mSCConfigs)
+        Activity->>Overlay: postInvalidate()
+        Activity->>Activity: onFaceDetectDraw()
+        alt Math.abs(y) >= 24
+            Activity->>Activity: setFaceDetectMessage(guide2_vi + "\\n" + guide2_en)
+            Activity->>Activity: setFaceDetectState(false)
+        else
+            Activity->>Activity: startTime gating check
+            Activity->>LExec: execute(() -> checkLiveness(rect))
+        end
+    end
+
+%% Liveness
+    activate LExec
+    LExec->>Activity: checkLiveness(rect)
+    alt !isFaceDetectImageOn() OR tooBig/tooSmall(rect)
+        LExec->>Activity: setFaceDetectState(false)
+        LExec->>Activity: setFaceDetectMessage(...)
+        LExec-->>Activity: isLivenessDetecting=false
+    else
+        LExec->>UI: runOnUiThread -> bitmap = SCUtils.adjustContrastAndBrightness(previewView.getBitmap(), 60f)
+        UI-->>LExec: Bitmap
+        LExec->>LExec: Map rect->bitmap size
+        LExec->>LExec: croppedBm = SCUtils.cropExpandedAreaAroundRect(bitmap, mappedRect)
+        LExec->>SC: detectLiveness(croppedBm)
+        SC->>ETC: detectLiveness(croppedBm)
+        ETC->>ETC: bm2 = SCUtils.rotateFlipResizeBitmap(croppedBm, mirror=false, w,h from mSCConfigs)
+        ETC->>SDK: results = FaceSDK.getFaces(bm2)
+        alt results not empty
+            ETC->>SDK: resultData = FaceSDK.processFaces(results.get(0), true,true,true)
+            SDK-->>ETC: ResultData{liveness, faceValid, wearMaskGlasses}
+            ETC-->>SC: ResultData
+            SC-->>LExec: ResultData
+            alt liveness && faceValid && !wearMaskGlasses
+                LExec->>Activity: setFaceDetectState(true)
+                LExec->>Activity: setFaceDetectMessage("")
+                LExec->>Activity: onFaceDetectImage(croppedBm)
+            else
+                LExec->>Activity: setFaceDetectState(false)
+                LExec->>Activity: setFaceDetectMessage(errMsg from ResultData)
+            end
+        else
+            ETC-->>SC: null
+            SC-->>LExec: null
+        end
+        LExec-->>Activity: isLivenessDetecting=false
+    end
+    deactivate LExec

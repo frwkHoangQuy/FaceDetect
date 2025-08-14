@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant Customer as KhachHang
+    participant App as UngDung
+    participant Camera as Camera
+    participant Detector as BoNhanDien
+
+    Customer->>App: Mo chuc nang chup khuon mat
+    App->>Camera: Kich hoat camera preview
+    Camera-->>App: Luong video
+
+    loop Lap den khi phat hien thanh cong
+        App->>Detector: Gui frame hien tai
+        alt Phat hien thanh cong
+            Detector-->>App: Khuon mat hop le
+            App->>Customer: Xac nhan & chup anh
+            note over App,Detector:"success" de thoat vong lap
+        else Khong phat hien / Khong hop le
+            Detector-->>App: Khong co mat / ngoai vung / goc sai
+            App->>Customer: Yeu cau chinh huong, anh sang, khoang cach
+        end
+    end
+
+    App-->>Customer: Hoan tat quy trinh
