@@ -2,6 +2,8 @@ package com.example.facedetect;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
@@ -23,9 +25,14 @@ import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.example.facedetect.UI.SCFaceGraphicOverlay;
 import com.example.facedetect.databinding.ActivityMainBinding;
+import com.example.facedetect.utils.YuvUtils;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import org.opencv.core.Mat;
+
+import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +41,7 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding viewBinding;
+    private SCFaceGraphicOverlay mFaceOverlay;
     private ExecutorService cameraExecutor;
 
 
@@ -41,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         cameraExecutor = Executors.newSingleThreadExecutor();
+        mFaceOverlay = findViewById(R.id.scfgoFaceOverlay);
         viewBinding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(viewBinding.getRoot());
         checkAndRequestCameraPermission();
@@ -104,12 +113,12 @@ public class MainActivity extends AppCompatActivity {
                 .setTargetRotation(viewBinding.viewFinder.getDisplay().getRotation())
                 .build();
         viewBinding.viewFinder.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
-        viewBinding.viewFinder.setScaleX(-1);
-        viewBinding.viewFinder.setScaleY(-1);
+//        viewBinding.viewFinder.setScaleX(-1);
+//        viewBinding.viewFinder.setScaleY(-1);
         preview.setSurfaceProvider(viewBinding.viewFinder.getSurfaceProvider());
 
         CameraSelector cameraSelector;
-        cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+        cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -123,15 +132,41 @@ public class MainActivity extends AppCompatActivity {
         cameraProvider.bindToLifecycle(this, cameraSelector, imageAnalysis, preview);
 
     }
-
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(ImageProxy imageProxy) {
-        Image image = imageProxy.getImage();
-        if (image != null) {
-            Log.d("CameraX", "Nhận được ảnh: " + image.getWidth() + "x" + image.getHeight());
-        } else {
-            Log.d("CameraX", "Không có ảnh trong frame này");
-        }
-        imageProxy.close();
+//        try {
+//            // 1️⃣ Lấy ảnh từ ImageProxy
+//            Image image = imageProxy.getImage();
+//            if (image == null) return;
+//
+//            // 2️⃣ Chuyển YUV → Bitmap RGB
+//            Mat rgbBitmap = YuvUtils.yuvToRgbMat(image);
+//
+//            // 3️⃣ Xử lý orientation
+//            int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
+//            Bitmap rotatedBitmap = rotateBitmap(rgbBitmap, rotationDegrees);
+//
+//            // 4️⃣ Crop theo vùng khung preview
+//            Rect cropRect = getFaceBoxFrame(); // xác định vùng mà user cần đặt mặt vào
+//            Bitmap croppedBitmap = Bitmap.createBitmap(
+//                    rotatedBitmap,
+//                    cropRect.left, cropRect.top,
+//                    cropRect.width(), cropRect.height()
+//            );
+//
+//            // 5️⃣ Detect tự động
+//            if (faceDetectorReady) {
+//                faceDetector.detect(croppedBitmap, result -> {
+//                    if (result.success) {
+//
+//                    } else {
+//                    }
+//                });
+//            }
+//
+//        } finally {
+//            // 6️⃣ Giải phóng ImageProxy để camera tiếp tục stream
+//            imageProxy.close();
+//        }
     }
 }
